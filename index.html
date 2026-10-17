@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>血腥橄欖球 Blood Bowl</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 選單：建立兩支球隊 -->
+  <section id="menu" class="screen">
+    <h1>血腥橄欖球 <small>Blood Bowl</small></h1>
+    <div id="teamEditors" class="editors"></div>
+    <div class="menu-bar">
+      <label>電腦速度
+        <select id="speedSel">
+          <option value="fast">快</option>
+          <option value="normal" selected>普通</option>
+          <option value="slow">慢</option>
+        </select>
+      </label>
+      <label>亂數種子 <input id="seedInput" type="text" placeholder="留空＝隨機" size="10"></label>
+      <button id="startBtn" class="primary">開始比賽</button>
+    </div>
+    <p id="menuError" class="error"></p>
+  </section>
+
+  <!-- 比賽畫面 -->
+  <section id="game" class="screen hidden">
+    <header id="scoreboard"></header>
+    <main class="game-main">
+      <div id="pitchWrap"><canvas id="pitch"></canvas></div>
+      <aside id="side">
+        <div id="banner"></div>
+        <div id="promptBox"></div>
+        <div id="playerCard"></div>
+        <div id="logBox"><div id="log"></div></div>
+        <div class="side-foot">
+          <label>電腦速度
+            <select id="speedSel2">
+              <option value="fast">快</option>
+              <option value="normal">普通</option>
+              <option value="slow">慢</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="tzToggle"> 顯示擒抱區</label>
+          <button id="menuBtn">回到選單</button>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+  <script src="js/engine/data.js"></script>
+  <script src="js/engine/engine.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ui/render.js"></script>
+  <script src="js/ui/app.js"></script>
+</body>
+</html>

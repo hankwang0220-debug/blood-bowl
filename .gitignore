@@ -1,0 +1,7 @@
+# 本機開發工具設定
+.claude/
+
+# 系統檔
+Thumbs.db
+desktop.ini
+.DS_Store

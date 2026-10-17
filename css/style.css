@@ -1,0 +1,106 @@
+:root {
+  --bg: #15171c;
+  --panel: #1f232b;
+  --panel2: #282d37;
+  --text: #e8e6e1;
+  --muted: #9aa0aa;
+  --accent: #e0a526;
+  --good: #5cc46b;
+  --bad: #e5534b;
+  --border: #383e4a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", system-ui, sans-serif; font-size: 14px; }
+button, select, input { font: inherit; color: inherit; }
+button { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: #1b1b1b; border-color: var(--accent); font-weight: bold; }
+button.danger { border-color: var(--bad); }
+select, input[type=text] { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.hidden { display: none !important; }
+.error { color: var(--bad); min-height: 1.2em; }
+
+/* 選單 */
+#menu { max-width: 1280px; margin: 0 auto; padding: 16px; }
+#menu h1 { margin: 4px 0 14px; letter-spacing: 2px; }
+#menu h1 small { font-size: 16px; color: var(--muted); font-weight: normal; }
+.editors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .editors { grid-template-columns: 1fr; } }
+.editor { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.editor h2 { margin: 0 0 8px; font-size: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.editor .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid #0006; }
+.editor table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.editor th, .editor td { padding: 3px 4px; border-bottom: 1px solid var(--border); text-align: center; }
+.editor td.l, .editor th.l { text-align: left; }
+.editor td.skills { text-align: left; color: var(--muted); font-size: 12px; }
+.editor .qty { white-space: nowrap; }
+.editor .qty button { padding: 0 7px; }
+.editor .qty span { display: inline-block; width: 22px; }
+.editor .extras { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.editor .stars { margin-top: 8px; }
+.editor .star { display: block; padding: 4px 0; }
+.editor .star small { color: var(--muted); }
+.editor .total { margin-top: 8px; font-weight: bold; }
+.editor .total.over { color: var(--bad); }
+.menu-bar { display: flex; gap: 16px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+
+/* 比賽畫面 */
+#game { display: flex; flex-direction: column; height: 100vh; }
+#scoreboard { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 6px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.sb-team { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+.sb-team.right { justify-content: flex-end; }
+.sb-name { font-weight: bold; font-size: 16px; padding: 2px 10px; border-radius: 6px; }
+.sb-name.active { outline: 2px solid var(--accent); }
+.sb-score { font-size: 28px; font-weight: bold; min-width: 30px; text-align: center; }
+.sb-mid { text-align: center; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.sb-mid b { color: var(--text); }
+.sb-info { font-size: 12px; color: var(--muted); }
+.rr { letter-spacing: 1px; color: var(--accent); }
+
+.game-main { flex: 1; display: flex; min-height: 0; }
+#pitchWrap { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; padding: 6px; }
+#pitch { display: block; cursor: pointer; border-radius: 6px; }
+#side { width: 360px; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); min-height: 0; }
+#banner { padding: 8px 12px; font-weight: bold; border-bottom: 1px solid var(--border); }
+#promptBox { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+#promptBox .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#promptBox .hint { color: var(--muted); font-size: 13px; margin: 4px 0; }
+#promptBox .err { color: var(--bad); font-size: 13px; margin: 4px 0; }
+#promptBox .chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 140px; overflow: auto; }
+.chip { font-size: 12px; padding: 3px 7px; border-radius: 12px; }
+.chip.sel { border-color: var(--accent); background: #4a3c17; }
+.die { min-width: 72px; padding: 8px 6px; font-weight: bold; }
+.die.good { border-color: var(--good); }
+.die.bad { border-color: var(--bad); }
+.compass { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; margin: 6px 0; }
+.compass button { padding: 6px 0; }
+#playerCard { padding: 8px 12px; border-bottom: 1px solid var(--border); min-height: 70px; font-size: 13px; }
+#playerCard .pc-head { font-weight: bold; margin-bottom: 4px; }
+#playerCard .stats { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; margin: 4px 0; }
+#playerCard .stats div { background: var(--panel2); margin: 0 2px; border-radius: 4px; padding: 2px 0; }
+#playerCard .stats small { display: block; color: var(--muted); font-size: 10px; }
+#playerCard .sk { display: inline-block; background: var(--panel2); border-radius: 4px; padding: 1px 6px; margin: 2px 2px 0 0; font-size: 12px; cursor: help; }
+#playerCard .muted { color: var(--muted); }
+#logBox { flex: 1; overflow: auto; padding: 6px 12px; font-size: 12.5px; min-height: 80px; }
+#log div { padding: 1px 0; border-bottom: 1px dotted #ffffff10; }
+#log .good { color: var(--good); }
+#log .bad { color: #ff8a80; }
+#log .head { color: var(--accent); font-weight: bold; padding-top: 6px; }
+#log .turn { color: #9ecbff; font-weight: bold; padding-top: 4px; }
+#log .td { color: #ffd54f; font-weight: bold; font-size: 14px; }
+#log .turnover { color: var(--bad); font-weight: bold; }
+#log .event { color: #ce93d8; }
+#log .rr { color: var(--accent); }
+#log .dice { color: #b0bec5; }
+#log .act { color: #cfd8dc; }
+.side-foot { padding: 8px 12px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.side-foot button { margin-left: auto; }
+
+@media (max-width: 1000px) {
+  .game-main { flex-direction: column; }
+  #side { width: auto; border-left: none; border-top: 1px solid var(--border); }
+  #game { height: auto; }
+}

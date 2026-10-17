@@ -91,7 +91,9 @@
         }
         return { yes: true };
       }
-      case 'bncDir': return { dir: bncDirection(G, G.players[pr.pid]) };
+      case 'bncDir':
+        if (pr.rushing && pr.canStop) return { stop: true };
+        return { dir: bncDirection(G, G.players[pr.pid]) };
       case 'turn':
         if (pr.error) { plans[t] = null; return END_TURN; }
         return planTurn(G, t);
@@ -101,6 +103,8 @@
   }
 
   function pickReroll(opts) {
+    if (opts.indexOf('brawler') >= 0) return 'brawler';
+    if (opts.indexOf('hatred') >= 0) return 'hatred';
     if (opts.indexOf('pro') >= 0) return 'pro';
     if (opts.indexOf('team') >= 0) return 'team';
     if (opts.indexOf('tmt') >= 0) return 'tmt';
@@ -152,13 +156,17 @@
       const dd = cheb(p.x, p.y, q.x, q.y);
       if (dd < bd) { bd = dd; best = q; }
     }
+    // 鏈球只能朝四個正方向（面向達陣區或邊線）
     let dx = 0, dy = 0;
-    if (best) { dx = Math.sign(best.x - p.x); dy = Math.sign(best.y - p.y); }
-    else dx = p.team === 0 ? 1 : -1;
+    if (best) {
+      const ax = best.x - p.x, ay = best.y - p.y;
+      if (Math.abs(ax) >= Math.abs(ay)) dx = Math.sign(ax) || 1; else dy = Math.sign(ay);
+    } else dx = p.team === 0 ? 1 : -1;
     // 太靠近邊線時往內轉
-    if (p.y <= 1) dy = Math.max(dy, 0) || (dx ? 0 : 1);
-    if (p.y >= H - 2) dy = Math.min(dy, 0) || (dx ? 0 : -1);
-    if (!dx && !dy) dx = 1;
+    if (p.y <= 1 && dy < 0) dy = 1;
+    if (p.y >= H - 2 && dy > 0) dy = -1;
+    if (p.y <= 0 && dx) { dx = 0; dy = 1; }
+    if (p.y >= H - 1 && dx) { dx = 0; dy = -1; }
     return BB.DIRS.findIndex(([a, b]) => a === dx && b === dy);
   }
 
@@ -218,7 +226,7 @@
 
   // ---------- 路徑（含彈簧跳躍） ----------
   const pRushOf = (G, p) => {
-    const q = G.weather === 'blizzard' ? 4 / 6 : 5 / 6;
+    const q = BB.prob(2, (G.weather === 'blizzard' ? -1 : 0) + (has(p, 'Drunkard') ? -1 : 0));
     return has(p, 'Sure Feet') ? 1 - (1 - q) * (1 - q) : q;
   };
 
@@ -227,22 +235,24 @@
     const out = BB.reach(G, p);
     for (const r of out.values()) r.steps = [{ type: 'move', path: r.path }];
     const active = G.act && G.act.pid === p.id;
-    if (!(has(p, 'Pogo Stick') || has(p, 'Leap')) || (active && G.act.leaped)) return out;
+    if (!(has(p, 'Pogo') || has(p, 'Leap')) || p.status !== 'standing' || p.rooted) return out;
     let maLeft, rush;
     if (active) { maLeft = Math.max(0, p.ma - G.act.used); rush = G.act.rush; }
-    else { maLeft = Math.max(0, p.ma - (p.status === 'prone' && p.ma >= 3 ? 3 : 0)); rush = has(p, 'Sprint') ? 3 : 2; }
+    else { maLeft = p.ma; rush = has(p, 'Sprint') ? 3 : 2; }
     if (maLeft + rush < 2) return out;
     const loose = G.ball.carrier == null && !G.ball.inAir;
     const pr = pRushOf(G, p);
     for (let x = p.x - 2; x <= p.x + 2; x++) {
       for (let y = p.y - 2; y <= p.y + 2; y++) {
-        if (!BB.onPitch(x, y) || cheb(x, y, p.x, p.y) !== 2 || BB.playerAt(G, x, y)) continue;
+        if (!BB.jumpTargetOk(G, p, x, y)) continue;
         let m = maLeft, rr = rush, prob = 1;
         for (let i = 0; i < 2; i++) { if (m > 0) m--; else { rr--; prob *= pr; } }
-        const mod = has(p, 'Pogo Stick') ? 0
-          : Math.min(0, 1 - Math.max(BB.markersOf(G, p.team, p.x, p.y).length, BB.markersOf(G, p.team, x, y).length));
+        let mod = -Math.max(BB.markersOf(G, p.team, p.x, p.y).length, BB.markersOf(G, p.team, x, y).length);
+        if (has(p, 'Pogo')) mod = 0;
+        else if (mod < 0) mod = Math.min(-1, mod + 1);
+        if (has(p, 'Very Long Legs')) mod++;
         prob *= BB.prob(p.ag, mod);
-        const leap = { type: 'leap', x, y };
+        const leap = { type: 'jump', x, y };
         const k = y * W + x;
         const cur = out.get(k);
         if (!cur || prob > cur.prob + 0.02) out.set(k, { x, y, prob, steps: [leap], rushes: rush - rr, path: [] });
@@ -308,7 +318,7 @@
 
   // 適合跑到前場接應傳球的球員
   function isReceiver(p) {
-    return !has(p, 'No Hands') && p.st <= 3 && p.ag <= 3 && (has(p, 'Catch') || p.ma >= 7 || has(p, 'Pogo Stick'));
+    return !has(p, 'No Ball') && p.st <= 3 && p.ag <= 3 && (has(p, 'Catch') || p.ma >= 7 || has(p, 'Pogo'));
   }
 
   function posValue(G, t, ctx, x, y, p) {
@@ -351,7 +361,7 @@
     const special = G.tf.special;
     const me = BB.pitchPlayers(G, t);
     const avail = me.filter(p => !p.activated && p.status !== 'stunned' &&
-      !(special && BB.markersOf(G, t, p.x, p.y).length));
+      !(special && !BB.isOpen(G, p)));
     if (!avail.length) return END_TURN;
     const carrier = G.ball.carrier != null ? G.players[G.ball.carrier] : null;
     const ctx = {
@@ -396,7 +406,7 @@
       }
     }
     // A3. 傳球：傳給能達陣的隊友，或把球往前送
-    if (ctx.weHave && avail.indexOf(carrier) >= 0 && !G.tf.pass && carrier.pa != null && !has(carrier, 'No Hands') && tdProb < 0.45 && !special) {
+    if (ctx.weHave && avail.indexOf(carrier) >= 0 && !G.tf.pass && carrier.pa != null && !has(carrier, 'No Ball') && tdProb < 0.45 && !special) {
       const spots = [{ x: carrier.x, y: carrier.y, prob: 1, steps: [] }];
       const more = [];
       for (const r of R(carrier).values()) if (r.prob >= 0.97 && !r.rushes) more.push(r);
@@ -450,7 +460,7 @@
                 const run = x === ctx.ez ? 1 : dist <= q.ma ? 0.85 : dist <= q.ma + 2 ? 0.55 : 0;
                 const v = ok * run;
                 if (v >= 0.25 && tdProb < 0.45) add(650 + 300 * v, p, 'ttm', step);
-              } else if (ctx.loose && qAvail && !has(q, 'No Hands')) {
+              } else if (ctx.loose && qAvail && !has(q, 'No Ball')) {
                 // 把小個子丟到球旁邊去撿球
                 if (cheb(x, y, G.ball.x, G.ball.y) !== 1) continue;
                 const v = ok * pickupProb(G, q, G.ball.x, G.ball.y);
@@ -459,7 +469,7 @@
                 // 把小個子丟到對方持球者旁邊去纏住他
                 if (cheb(x, y, ctx.carrier.x, ctx.carrier.y) !== 1) continue;
                 add(200 + 100 * ok, p, 'ttm', step);
-              } else if (ctx.weHave && !qBall && !has(q, 'No Hands') && ok >= 0.3 && qAvail) {
+              } else if (ctx.weHave && !qBall && !has(q, 'No Ball') && ok >= 0.3 && qAvail) {
                 // 把小個子丟到前場當接應
                 const c = ctx.carrier;
                 const fwd = ctx.ez === W - 1 ? x - c.x : c.x - x;
@@ -476,11 +486,29 @@
     if (ctx.loose && !special) {
       const bi = G.ball.y * W + G.ball.x;
       for (const p of avail) {
-        if (has(p, 'No Hands')) continue;
+        if (has(p, 'No Ball')) continue;
         const r = R(p).get(bi);
         if (!r) continue;
+        // 附近沒有對手時用保球行動（2+ 撿球，比較穩）
+        if (!BB.canActivate(G, p, 'secure')) {
+          const tot = r.prob * (1 - (1 / 6) * (1 / 6));
+          add(620 + 300 * tot, p, 'secure', r.steps);
+        }
         const tot = r.prob * Math.min(1, pickupProb(G, p, G.ball.x, G.ball.y));
         add(tot >= 0.5 ? 600 + 300 * tot : 100 + 300 * tot, p, 'move', r.steps);
+      }
+    }
+    // D3. 特殊攻擊：刺擊、電鋸、噴吐、噴火
+    const breakP = (av, mod) => { let c = 0; for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) if (a + b + mod >= av) c++; return c / 36; };
+    for (const p of avail) {
+      if (p.status !== 'standing') continue;
+      for (const q of BB.pitchPlayers(G, 1 - t)) {
+        if (!BB.adjacent(p, q)) continue;
+        const bonus = q === carrier ? 1.8 : 1;
+        if (has(p, 'Stab') && q.status === 'standing') add(380 + 60 * breakP(q.av, 0) * bonus, p, 'stab', [{ type: 'stab', target: q.id }]);
+        if (has(p, 'Chainsaw')) add(120 + 120 * (5 / 6) * breakP(q.av, has(q, 'Iron Hard Skin') ? 0 : 3) * bonus, p, 'chainsaw', [{ type: 'chainsaw', target: q.id }]);
+        if (has(p, 'Projectile Vomit') && q.status === 'standing') add(140 + 100 * (5 / 6) * breakP(q.av, 0) * bonus, p, 'vomit', [{ type: 'vomit', target: q.id }]);
+        if (has(p, 'Breathe Fire') && q.status === 'standing') add(110 + 120 * (q.st >= 5 ? 0.33 : 0.5) * bonus, p, 'fire', [{ type: 'fire', target: q.id }]);
       }
     }
     // C. 閃擊持球者
@@ -542,7 +570,7 @@
     for (const p of avail) {
       if (p === carrier || isBnc(p)) continue;
       const marked = BB.markersOf(G, t, p.x, p.y).length > 0;
-      const pogo = has(p, 'Pogo Stick');
+      const pogo = has(p, 'Pogo');
       if (marked && !pogo) {
         if (p.status === 'prone') add(200, p, 'move', []);
         continue;
@@ -563,7 +591,7 @@
     // G. 犯規
     if (!G.tf.foul && !special) {
       for (const p of avail) {
-        if (p.star || p.status !== 'standing' || G.ball.carrier === p.id || isBnc(p) || has(p, 'No Hands') && !has(p, 'Dirty Player')) continue;
+        if (p.star || p.status !== 'standing' || G.ball.carrier === p.id || isBnc(p) || has(p, 'No Ball') && !has(p, 'Dirty Player')) continue;
         for (const q of BB.pitchPlayers(G, 1 - t)) {
           if (q.status === 'standing') continue;
           if (BB.adjacent(p, q)) { add(55, p, 'foul', [{ type: 'foul', target: q.id }]); continue; }
@@ -581,7 +609,7 @@
       if (!isBnc(p) || p.status !== 'standing' || special) continue;
       let dd = 99;
       for (const q of BB.pitchPlayers(G, 1 - t)) if (q.status === 'standing') dd = Math.min(dd, cheb(p.x, p.y, q.x, q.y));
-      if (dd <= 4) add(70, p, 'move', []);
+      if (dd <= 4) add(70, p, 'bnc', []);
     }
 
     if (!cands.length) return END_TURN;

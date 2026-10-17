@@ -23,27 +23,45 @@
     [0, 1].forEach(i => box.appendChild(editor(i)));
   }
 
+  // 技能標籤：滑鼠移上去看說明；沒實作的加上標記
+  function skillTag(s) {
+    const { name, param } = BB.parseSkill(s);
+    const zh = (BB.SKILL_ZH[name] || name) + (param ? `（${param}）` : '');
+    const impl = BB.IMPLEMENTED.has(name);
+    return `<span class="sk${impl ? '' : ' noimpl'}" title="${esc(name + '：' + (BB.SKILLS[name] || '') + (impl ? '' : '［尚未實作］'))}">${esc(zh)}</span>`;
+  }
+  BB.skillTag = skillTag;
+
   function editor(i) {
     const tc = S.cfgs[i];
     const def = BB.TEAMS[tc.race];
     const d = document.createElement('div');
     d.className = 'editor';
-    const raceOpts = Object.keys(BB.TEAMS).map(k => `<option value="${k}" ${k === tc.race ? 'selected' : ''}>${BB.TEAMS[k].name}</option>`).join('');
+    const raceOpts = [1, 2, 3, 4].map(tier => `<optgroup label="第 ${tier} 級">${BB.TEAM_ORDER.filter(k => BB.TEAMS[k].tier === tier)
+      .map(k => `<option value="${k}" ${k === tc.race ? 'selected' : ''}>${BB.TEAMS[k].name}（${BB.TEAMS[k].nameEn}）</option>`).join('')}</optgroup>`).join('');
     const stat = (v, plus) => v == null ? '-' : v + (plus ? '+' : '');
     const rows = def.positions.map(p => `
       <tr>
-        <td class="l">${esc(p.name)}</td>
+        <td class="l">${esc(p.name)}${p.bigGuyShared ? '＊' : ''}<br><small class="muted">${esc(p.nameEn)}</small></td>
         <td>${p.ma}</td><td>${p.st}</td><td>${stat(p.ag, 1)}</td><td>${stat(p.pa, 1)}</td><td>${stat(p.av, 1)}</td>
-        <td class="skills">${p.skills.map(s => BB.SKILL_ZH[s] || s).join('、') || '—'}</td>
+        <td class="skills">${p.skills.map(skillTag).join('') || '—'}</td>
         <td>${p.cost}k</td>
         <td class="qty"><button data-a="dec" data-k="${p.key}">−</button><span>${tc.counts[p.key] || 0}</span><button data-a="inc" data-k="${p.key}">+</button><small>/${p.max}</small></td>
       </tr>`).join('');
-    const stars = Object.values(BB.STARS).filter(s => s.teams.indexOf(tc.race) >= 0).map(s => `
+    const starList = BB.STAR_ORDER.map(k => BB.STARS[k]).filter(s => s.teams.indexOf(tc.race) >= 0);
+    const stars = starList.map(s => `
       <label class="star"><input type="checkbox" data-a="star" data-k="${s.key}" ${tc.stars.indexOf(s.key) >= 0 ? 'checked' : ''}>
-        ★ <b>${esc(s.name)}</b>（${s.cost}k）MA${s.ma} ST${s.st} AG${s.ag}+ PA${stat(s.pa, 1)} AV${s.av}+<br>
-        <small>${s.skills.map(k => BB.SKILL_ZH[k] || k).join('、')}｜${esc(s.note)}</small></label>`).join('');
+        ★ <b>${esc(s.name)}</b>${s.mega ? ' <small class="mega">超級巨星</small>' : ''}（${s.cost}k）
+        ${s.players.map(p => `<br><small>${s.players.length > 1 ? esc(p.name) + '：' : ''}MA${p.ma} ST${p.st} AG${stat(p.ag, 1)} PA${stat(p.pa, 1)} AV${stat(p.av, 1)}</small> ${p.skills.map(skillTag).join('')}`).join('')}
+      </label>`).join('');
+    const hasCaptain = def.rules.indexOf('Team Captain') >= 0;
+    const capOpts = def.positions.filter(p => !BB.isBigGuy(p) && (tc.counts[p.key] || 0) > 0)
+      .map(p => `<option value="${p.key}" ${tc.captain === p.key ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+    const rules = def.rules.map(r => { const z = BB.TEAM_RULES[r] || [r, '']; return `<span class="sk" title="${esc(z[1])}">${esc(z[0])}</span>`; }).join('');
+    const leagues = def.leagues.map(l => BB.LEAGUE_ZH[l] || l).join('、');
     const cost = BB.teamCost(tc), n = BB.teamPlayerCount(tc);
-    const bad = cost > BB.BUDGET || n < 11 || n > 16;
+    const errs = BB.teamErrors(tc);
+    const qty = (a, v, label) => `<span class="qty">${label}<button data-a="${a}dec">−</button><span>${v}</span><button data-a="${a}inc">+</button></span>`;
     d.innerHTML = `
       <h2><span class="swatch" style="background:${def.colors[i === 1 && S.cfgs[0].race === tc.race ? 1 : 0]}"></span>
         ${i === 0 ? '主隊' : '客隊'}
@@ -51,16 +69,22 @@
         <select data-a="ctrl"><option value="human" ${S.ctrl[i] === 'human' ? 'selected' : ''}>玩家操作</option><option value="ai" ${S.ctrl[i] === 'ai' ? 'selected' : ''}>電腦 AI</option></select>
         <button data-a="default">預設陣容</button>
       </h2>
+      <div class="teaminfo">第 ${def.tier} 級｜${esc(leagues)}${rules ? '｜' + rules : ''}</div>
       <table>
         <tr><th class="l">位置</th><th>MA</th><th>ST</th><th>AG</th><th>PA</th><th>AV</th><th class="l">技能</th><th>費用</th><th>人數</th></tr>
         ${rows}
       </table>
+      ${def.bigGuyMax ? `<div class="hint">＊ 標示的大塊頭合計最多 ${def.bigGuyMax} 名</div>` : ''}
       <div class="extras">
-        <span class="qty">隊伍重擲（${def.rerollCost}k）<button data-a="rrdec">−</button><span>${tc.rerolls}</span><button data-a="rrinc">+</button></span>
-        <label><input type="checkbox" data-a="apo" ${tc.apothecary ? 'checked' : ''} ${def.apothecary ? '' : 'disabled'}> 隊醫（${BB.APOTHECARY_COST}k）</label>
+        ${qty('rr', tc.rerolls, `隊伍重擲（${def.rerollCost}k）`)}
+        <label><input type="checkbox" data-a="apo" ${tc.apothecary ? 'checked' : ''} ${def.apothecary ? '' : 'disabled'}> 隊醫（${BB.APOTHECARY_COST}k）${def.apothecary ? '' : '（不可雇用）'}</label>
+        ${qty('cl', tc.cheerleaders || 0, '啦啦隊（10k）')}
+        ${qty('ac', tc.coaches || 0, '助理教練（10k）')}
+        ${hasCaptain ? `<label>隊長 <select data-a="captain"><option value="">自動</option>${capOpts}</select></label>` : ''}
       </div>
-      ${stars ? `<div class="stars"><b>可雇用的明星球員</b>${stars}</div>` : ''}
-      <div class="total ${bad ? 'over' : ''}">球員 ${n} 人（需 11–16 人）｜花費 ${cost}k / ${BB.BUDGET}k</div>`;
+      ${stars ? `<details class="stars" ${tc.stars.length ? 'open' : ''}><summary><b>可雇用的明星球員（${starList.length}，最多 ${BB.MAX_STARS} 組）</b></summary>${stars}</details>` : ''}
+      <div class="total ${errs.length ? 'over' : ''}">球員 ${n} 人（需 11–16 人）｜花費 ${cost}k / ${BB.BUDGET}k</div>
+      ${errs.map(e => `<div class="error">${esc(e)}</div>`).join('')}`;
     d.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
@@ -70,6 +94,10 @@
       if (a === 'dec' && (tc.counts[k] || 0) > 0) tc.counts[k]--;
       if (a === 'rrinc' && tc.rerolls < 8) tc.rerolls++;
       if (a === 'rrdec' && tc.rerolls > 0) tc.rerolls--;
+      if (a === 'clinc' && (tc.cheerleaders || 0) < 6) tc.cheerleaders = (tc.cheerleaders || 0) + 1;
+      if (a === 'cldec' && (tc.cheerleaders || 0) > 0) tc.cheerleaders--;
+      if (a === 'acinc' && (tc.coaches || 0) < 6) tc.coaches = (tc.coaches || 0) + 1;
+      if (a === 'acdec' && (tc.coaches || 0) > 0) tc.coaches--;
       if (a === 'default') S.cfgs[i] = BB.defaultTeamConfig(tc.race);
       buildMenu();
     });
@@ -78,6 +106,7 @@
       if (a === 'race') S.cfgs[i] = BB.defaultTeamConfig(e.target.value);
       if (a === 'ctrl') S.ctrl[i] = e.target.value;
       if (a === 'apo') tc.apothecary = e.target.checked;
+      if (a === 'captain') tc.captain = e.target.value || null;
       if (a === 'star') {
         const k = e.target.dataset.k;
         if (e.target.checked) { if (tc.stars.indexOf(k) < 0) tc.stars.push(k); }
@@ -96,15 +125,18 @@
 
   function startGame() {
     for (const i of [0, 1]) {
-      const tc = S.cfgs[i];
-      const n = BB.teamPlayerCount(tc), c = BB.teamCost(tc);
-      if (n < 11 || n > 16) { $('#menuError').textContent = `${i ? '客隊' : '主隊'}球員人數必須是 11–16 人`; return; }
-      if (c > BB.BUDGET) { $('#menuError').textContent = `${i ? '客隊' : '主隊'}超出預算`; return; }
+      const errs = BB.teamErrors(S.cfgs[i]);
+      if (errs.length) { $('#menuError').textContent = `${i ? '客隊' : '主隊'}：${errs[0]}`; return; }
     }
     $('#menuError').textContent = '';
     const seedTxt = $('#seedInput').value.trim();
     const seed = seedTxt ? (/^\d+$/.test(seedTxt) ? Number(seedTxt) >>> 0 : hashSeed(seedTxt)) : (Math.random() * 4294967296) >>> 0;
-    const cfg = { seed, teams: S.cfgs.map(tc => ({ race: tc.race, counts: tc.counts, rerolls: tc.rerolls, apothecary: tc.apothecary, stars: tc.stars })) };
+    const cfg = {
+      seed, teams: S.cfgs.map(tc => ({
+        race: tc.race, counts: tc.counts, rerolls: tc.rerolls, apothecary: tc.apothecary, stars: tc.stars,
+        cheerleaders: tc.cheerleaders || 0, coaches: tc.coaches || 0, captain: tc.captain || null
+      }))
+    };
     S.speed = $('#speedSel').value;
     $('#speedSel2').value = S.speed;
     S.game = new BB.Game(cfg);
@@ -228,7 +260,7 @@
   function renderScoreboard() {
     const g = G();
     const T = g.teams;
-    const pips = t => '●'.repeat(Math.max(0, t.rerollsLeft)) + '○'.repeat(Math.max(0, t.rerolls - t.rerollsLeft));
+    const pips = t => '●'.repeat(Math.max(0, t.rerollsLeft)) + '○'.repeat(Math.max(0, t.rerolls - t.rerollsLeft)) + '◆'.repeat(Math.max(0, t.driveRR || 0));
     const side = (i) => {
       const t = T[i];
       const extras = [`重擲 <span class="rr">${pips(t) || '—'}</span>`];
@@ -290,11 +322,11 @@
   function promptTitle(pr) {
     switch (pr.type) {
       case 'kickOrReceive': return '贏得擲硬幣';
-      case 'setup': return { kick: '布陣（開球方）', receive: '布陣（接球方）', solid: '穩固防守', quick: '快速開球' }[pr.kind];
+      case 'setup': return { kick: '布陣（開球方）', receive: '布陣（接球方）', solid: '穩固防守', quick: '快速開球', swarm: '蜂擁而至' }[pr.kind];
       case 'placeKick': return '選擇開球落點';
       case 'touchback': return '回場球：選擇拿球的球員';
       case 'highKick': return '高吊球';
-      case 'turn': return pr.special ? '閃擊！開球事件（額外行動）' : `第 ${G().turnNo[pr.team]} 回合`;
+      case 'turn': return pr.special ? '衝鋒！開球事件（額外行動）' : `第 ${G().turnNo[pr.team]} 回合`;
       case 'activation': { const p = G().players[pr.pid]; return `${pn(p)}：${BB.ACTION_ZH[pr.action]}`; }
       case 'reroll': return '要重擲嗎？';
       case 'blockDice': return '選擇阻擋骰';
@@ -313,11 +345,23 @@
       box.appendChild(row(btn('接球', () => act({ choice: 'receive' }), 'primary'), btn('開球', () => act({ choice: 'kick' }))));
     },
     setup(pr, box, g) {
+      if (pr.kind === 'swarm') {
+        const line = BB.linemanPos(BB.TEAMS[g.teams[pr.team].race]).key;
+        box.appendChild(hint(`蜂擁而至：可以再從替補席派上最多 ${pr.limit} 名線鋒（已派 ${pr.moved.length} 人），場上可以超過 11 人。`));
+        const chips = document.createElement('div');
+        chips.className = 'chips';
+        for (const p of g.players.filter(q => q.team === pr.team && q.loc === 'reserve' && q.pos === line)) {
+          chips.appendChild(btn(`${p.short} ${pn(p)}`, () => { S.setupSel = p.id; S.sel = p.id; renderSide(); draw(); }, 'chip' + (S.setupSel === p.id ? ' sel' : '')));
+        }
+        box.appendChild(chips);
+        box.appendChild(row(btn('完成', () => act({ type: 'done' }), 'primary')));
+        return;
+      }
       const limited = pr.kind === 'solid' || pr.kind === 'quick';
       if (limited) {
         box.appendChild(hint(pr.kind === 'quick'
-          ? `點選己方球員，再點相鄰的空格（最多 ${pr.limit} 人，每人 1 格）。已移動 ${pr.moved.length} 人。`
-          : `點選己方球員，再點己方半場的空格重新擺放（最多 ${pr.limit} 人）。已移動 ${pr.moved.length} 人。`));
+          ? `點選未被盯防的己方球員，再點相鄰的空格（最多 ${pr.limit} 人，每人 1 格）。已移動 ${pr.moved.length} 人。`
+          : `點選未被盯防的己方球員，再點己方半場的空格重新擺放（最多 ${pr.limit} 人）。已移動 ${pr.moved.length} 人。`));
         box.appendChild(row(btn('完成', () => act({ type: 'done' }), 'primary')));
         return;
       }
@@ -352,11 +396,11 @@
     },
     turn(pr, box, g) {
       const p = S.sel != null ? g.players[S.sel] : null;
-      if (pr.special) box.appendChild(hint(`閃擊事件：已行動 ${g.tf.count}/${g.tf.special.limit} 人，只能移動或閃擊，不能使用隊伍重擲。`));
+      if (pr.special) box.appendChild(hint(`衝鋒事件：已行動 ${g.tf.count}/${g.tf.special.limit} 人，只能讓未被盯防的球員移動、閃擊或投擲隊友；有人倒地就結束。`));
       if (p && p.team === pr.team && !p.activated && p.loc === 'pitch') {
         const legal = BB.legalActions(g, p);
         box.appendChild(hint(`已選擇 ${pn(p)}。選擇行動，或直接點亮起的格子移動、點相鄰對手阻擋。`));
-        const order = ['move', 'block', 'blitz', 'pass', 'handoff', 'foul', 'ttm'];
+        const order = ['bnc', 'move', 'block', 'blitz', 'secure', 'pass', 'handoff', 'foul', 'ttm', 'stab', 'chainsaw', 'vomit', 'fire', 'gaze'];
         box.appendChild(row(...order.filter(a => legal.indexOf(a) >= 0).map(a =>
           btn(BB.ACTION_ZH[a], () => act({ type: 'activate', pid: p.id, action: a }), a === 'move' ? 'primary' : ''))));
       } else box.appendChild(hint('點選一名尚未行動的己方球員。'));
@@ -373,7 +417,8 @@
       const r = row();
       if (pr.action === 'pass' && carry) r.appendChild(btn(S.mode === 'pass' ? '取消傳球' : '選擇傳球目標', () => { S.mode = S.mode === 'pass' ? 'move' : 'pass'; renderSide(); draw(); }, S.mode === 'pass' ? 'primary' : ''));
       if (pr.action === 'ttm') r.appendChild(btn(S.mode === 'ttm' ? '取消投擲' : '選擇要丟的隊友', () => { S.mode = S.mode === 'ttm' ? 'move' : 'ttm'; S.ttmPid = null; renderSide(); draw(); }, S.mode === 'ttm' ? 'primary' : ''));
-      if ((BB.has(p, 'Pogo Stick') || BB.has(p, 'Leap')) && A && !A.leaped && pr.action !== 'block')
+      const canMove = ['block', 'stab', 'chainsaw', 'vomit', 'fire'].indexOf(pr.action) < 0;
+      if (canMove && A && jumpTargets(g, p).length)
         r.appendChild(btn(S.mode === 'leap' ? '取消跳躍' : '跳躍', () => { S.mode = S.mode === 'leap' ? 'move' : 'leap'; renderSide(); draw(); }, S.mode === 'leap' ? 'primary' : ''));
       r.appendChild(btn('結束行動', () => act({ type: 'end' }), 'danger'));
       box.appendChild(r);
@@ -381,19 +426,25 @@
         move: '點亮起的格子移動：白色＝安全，黃色/紅色＝需要閃避或衝刺（越紅越危險，淡色＝衝刺）。',
         block: '點相鄰、站著的對手進行阻擋。',
         blitz: '可以先移動，再點相鄰對手阻擋（阻擋消耗 1 格移動力）。',
+        secure: '移動到球所在的格子，擲 2+ 就能安全撿起球，然後行動結束。',
         pass: '移動到想要的位置後，按「選擇傳球目標」再點目標格。',
         handoff: '移動後點相鄰的隊友手遞球。',
         foul: '移動後點相鄰、倒地的對手犯規。',
-        ttm: '按「選擇要丟的隊友」，點相鄰隊友，再點落點。'
+        ttm: '按「選擇要丟的隊友」，點相鄰隊友，再點落點。',
+        stab: '點相鄰、站著的對手刺擊（直接擲護甲）。',
+        chainsaw: '點相鄰的對手用電鋸攻擊（2+ 成功，護甲 +3；擲出 1 會反彈）。',
+        vomit: '點相鄰、站著的對手噴吐（2+ 命中，直接擲護甲）。',
+        fire: '點相鄰、站著的對手噴火（4+ 讓對方倒地，擲出 1 自己倒地）。',
+        gaze: '可以先移動，再點相鄰、站著的對手催眠（3+ 讓對方分心）。'
       };
       box.appendChild(hint(S.mode === 'pass' ? '點目標格傳球。框線顏色：綠=快傳 黃=短傳 橘=長傳 紅=長炸彈。'
-        : S.mode === 'ttm' ? (S.ttmPid == null ? '點一名相鄰、有 Right Stuff 的隊友。' : '點落點（快傳或短傳距離）。')
-          : S.mode === 'leap' ? '點 2 格外的空格跳過去。' : tips[pr.action]));
+        : S.mode === 'ttm' ? (S.ttmPid == null ? '點一名相鄰、有「可投擲」的隊友。' : '點落點（快傳或短傳距離）。')
+          : S.mode === 'leap' ? '點藍框的格子跳過去（消耗 2 格移動力，需要敏捷檢定）。' : tips[pr.action]));
     },
     reroll(pr, box) {
       box.appendChild(hint(esc(pr.label)));
       const T = G().teams[pr.team];
-      const names = { team: `使用隊伍重擲（剩 ${T.rerollsLeft}）`, pro: '使用職業球員', tmt: '使用「會思考的巨魔」' };
+      const names = { team: `使用隊伍重擲（剩 ${T.rerollsLeft + T.driveRR}）`, pro: '使用職業球員', tmt: '使用「會思考的巨魔」', brawler: '鬥毆者重擲雙方倒地', hatred: '仇恨重擲攻方倒地' };
       box.appendChild(row(...pr.options.map(o => btn(names[o], () => act({ use: o }), 'primary')), btn('不重擲', () => act({ use: null }))));
     },
     blockDice(pr, box, g) {
@@ -409,7 +460,7 @@
       box.appendChild(r);
       if (pr.options && pr.options.length) {
         const T = g.teams[pr.team];
-        const names = { team: `隊伍重擲（剩 ${T.rerollsLeft}）`, pro: '職業球員重擲', tmt: '會思考的巨魔重擲' };
+        const names = { team: `隊伍重擲（剩 ${T.rerollsLeft + T.driveRR}）`, pro: '職業球員重擲一顆', tmt: '會思考的巨魔重擲一顆', brawler: '鬥毆者重擲雙方倒地', hatred: '仇恨重擲攻方倒地' };
         box.appendChild(row(...pr.options.map(o => btn(names[o], () => act({ reroll: o })))));
       }
     },
@@ -436,18 +487,27 @@
     },
     bncDir(pr, box, g) {
       const p = g.players[pr.pid];
-      box.appendChild(hint(`${pn(p)} 第 ${pr.step}/${pr.of} 步：選擇大致方向（點相鄰格或下方按鈕）。擲 D6：1–2 偏左、3–4 直走、5–6 偏右。`));
+      box.appendChild(hint(`${pn(p)} 第 ${pr.step} 步（移動力 ${pr.of}${pr.rushing ? '，這一步要衝刺' : ''}）：選擇面向（達陣區或邊線）。擲 D6：1–2 偏左、3–4 直走、5–6 偏右。`));
       const grid = document.createElement('div');
       grid.className = 'compass';
       const arrows = ['↖', '↑', '↗', '→', '↘', '↓', '↙', '←'];
-      const layout = [0, 1, 2, 7, -1, 3, 6, 5, 4];
+      const layout = [-1, 1, -1, 7, -1, 3, -1, 5, -1];
       for (const i of layout) {
         if (i < 0) { grid.appendChild(document.createElement('span')); continue; }
         grid.appendChild(btn(arrows[i], () => act({ dir: i })));
       }
       box.appendChild(grid);
+      if (pr.canStop) box.appendChild(row(btn('停下來', () => act({ stop: true }), 'danger')));
     }
   };
+  // 跳躍目標（距離 2、中間能跳過）
+  function jumpTargets(g, p) {
+    const A = g.act;
+    if (!A || A.pid !== p.id || Math.max(0, p.ma - A.used) + A.rush < 2 || p.rooted) return [];
+    const r = [];
+    for (let x = p.x - 2; x <= p.x + 2; x++) for (let y = p.y - 2; y <= p.y + 2; y++) if (BB.jumpTargetOk(g, p, x, y)) r.push([x, y]);
+    return r;
+  }
   const FACE_ICON = { AD: '💀', BD: '⚔', PU: '➜', DS: '❗', POW: '💥' };
 
   function renderCard() {
@@ -462,11 +522,14 @@
     else status.push({ reserve: '替補席', ko: '昏迷', cas: '受傷離場', sent: '罰下場', heat: '中暑' }[p.loc] || p.loc);
     if (g.ball.carrier === p.id) status.push('持球');
     if (p.activated && p.team === g.active) status.push('已行動');
-    if (p.lostTZ) status.push('失去擒抱區');
+    if (p.distracted) status.push('分心');
+    if (p.rooted) status.push('生根');
+    if (p.snack) status.push('吃壞肚子');
+    if (p.captain) status.push('隊長');
     el.innerHTML = `
       <div class="pc-head"><span style="color:${g.teams[p.team].color};filter:brightness(1.4)">■</span> ${p.star ? '★ ' : ''}${esc(pn(p))} <span class="muted">（${esc(g.teams[p.team].name)}｜${status.join('、')}）</span></div>
       <div class="stats"><div><small>MA</small>${p.ma}</div><div><small>ST</small>${p.st}</div><div><small>AG</small>${st(p.ag)}</div><div><small>PA</small>${st(p.pa)}</div><div><small>AV</small>${st(p.av)}</div></div>
-      <div>${p.skills.map(s => `<span class="sk" title="${esc(BB.SKILLS[s] || s)}">${esc(BB.SKILL_ZH[s] || s)}</span>`).join('') || '<span class="muted">無技能</span>'}</div>`;
+      <div>${p.skills.map(s => skillTag(s + (p.params[s] ? ` (${p.params[s]})` : ''))).join('') || '<span class="muted">無技能</span>'}</div>`;
   }
 
   // ================= 繪圖覆蓋層 =================
@@ -550,14 +613,17 @@
             if (hv) ui.targets.push({ x: hv.x, y: hv.y, label: '落點' });
           }
         } else if (S.mode === 'leap') {
-          for (let x = p.x - 2; x <= p.x + 2; x++) for (let y = p.y - 2; y <= p.y + 2; y++)
-            if (BB.onPitch(x, y) && BB.cheb(x, y, p.x, p.y) === 2 && !BB.playerAt(g, x, y)) ui.targets.push({ x, y, color: '#81d4fa' });
+          for (const [x, y] of jumpTargets(g, p)) ui.targets.push({ x, y, color: '#81d4fa', label: '跳' });
         } else {
-          if (pr.action !== 'block') {
+          const special = ['stab', 'chainsaw', 'vomit', 'fire'].indexOf(pr.action) >= 0;
+          if (pr.action !== 'block' && !special) {
             ui.reach = reachFor(p);
+            if (pr.action === 'secure') ui.reach = new Map([...ui.reach].filter(([, r]) => r.x === g.ball.x && r.y === g.ball.y));
             addPathHover(ui, p, ui.reach, hv);
           }
           if ((pr.action === 'block' || pr.action === 'blitz') && A && !A.blocked) addBlockTargets(ui, g, p, pr.action === 'blitz');
+          if (special || pr.action === 'gaze')
+            for (const q of BB.pitchPlayers(g, 1 - p.team)) if (BB.adjacent(p, q) && (q.status === 'standing' || pr.action === 'chainsaw')) ui.targets.push({ x: q.x, y: q.y, color: '#ff5252', label: BB.ACTION_ZH[pr.action] });
           if (pr.action === 'handoff' && g.ball.carrier === p.id)
             for (const q of BB.pitchPlayers(g, p.team)) if (q !== p && BB.adjacent(p, q) && BB.canCatch(q)) ui.targets.push({ x: q.x, y: q.y, color: '#81d4fa', label: '手遞' });
           if (pr.action === 'foul')
@@ -580,7 +646,7 @@
       case 'bncDir': {
         const p = g.players[pr.pid];
         ui.sel = p.id;
-        for (const [a, b] of BB.DIRS) ui.targets.push({ x: p.x + a, y: p.y + b, color: '#ce93d8' });
+        for (const i of [1, 3, 5, 7]) ui.targets.push({ x: p.x + BB.DIRS[i][0], y: p.y + BB.DIRS[i][1], color: '#ce93d8' });
         break;
       }
       case 'reroll':
@@ -669,7 +735,7 @@
       case 'bncDir': {
         const p = g.players[pr.pid];
         const i = BB.DIRS.findIndex(([a, b]) => a === c.x - p.x && b === c.y - p.y);
-        if (i >= 0) act({ dir: i });
+        if (i >= 0 && i % 2 === 1) act({ dir: i });
         return;
       }
       case 'turn': return clickTurn(pr, g, c, who);
@@ -690,7 +756,7 @@
       act({ type: 'activate', pid: sel.id, action: 'block' });
       return;
     }
-    if (!who && BB.onPitch(c.x, c.y) && !BB.has(sel, 'Ball & Chain')) {
+    if (!who && BB.onPitch(c.x, c.y) && !BB.has(sel, 'Ball & Chain') && legal.indexOf('move') >= 0) {
       const r = reachFor(sel).get(c.y * W + c.x);
       if (r) {
         S.queued = { pid: sel.id, ans: { type: 'move', path: r.path } };
@@ -704,7 +770,7 @@
   function clickActivation(pr, g, c, who) {
     const p = g.players[pr.pid];
     if (S.mode === 'pass') { if (BB.onPitch(c.x, c.y)) act({ type: 'pass', x: c.x, y: c.y }); return; }
-    if (S.mode === 'leap') { act({ type: 'leap', x: c.x, y: c.y }); return; }
+    if (S.mode === 'leap') { act({ type: 'jump', x: c.x, y: c.y }); return; }
     if (S.mode === 'ttm') {
       if (S.ttmPid == null) {
         if (who && who.team === p.team && who !== p) { S.ttmPid = who.id; renderSide(); draw(); }
@@ -714,6 +780,7 @@
       return;
     }
     if (who) {
+      if (who.team !== p.team && ['stab', 'chainsaw', 'vomit', 'fire', 'gaze'].indexOf(pr.action) >= 0) { act({ type: pr.action, target: who.id }); return; }
       if (who.team !== p.team && who.status === 'standing' && (pr.action === 'block' || pr.action === 'blitz')) { act({ type: 'block', target: who.id }); return; }
       if (who.team !== p.team && who.status !== 'standing' && pr.action === 'foul') { act({ type: 'foul', target: who.id }); return; }
       if (who.team === p.team && who !== p && pr.action === 'handoff') { act({ type: 'handoff', target: who.id }); return; }
@@ -781,5 +848,6 @@
   }
 
   BB.App = S; // 除錯用
+  S.refresh = () => update();
   init();
 })();

@@ -7,7 +7,9 @@
 (function () {
   'use strict';
   const BB = globalThis.BB;
-  const WORDS = ['宣告：傳球', '快傳', '短傳', '長傳', '長炸彈', '攔截成功', '宣告：投擲隊友', '跳躍', '手遞給', '達陣！', '失誤'];
+  const WORDS = ['宣告：傳球', '快傳', '短傳', '長傳', '長炸彈', '攔截成功', '宣告：投擲隊友', '跳躍', '手遞給', '達陣！', '失誤',
+    '宣告：保球', '刺擊', '電鋸', '噴吐', '噴火', '拖延', '分心', '生根', '爭辯判決', '衝鋒！', '可疑點心', '蜂擁而至', '隊長', '嗜血',
+    '野性難馴', '狂怒失控', '觸手', '飛撲擒抱', '如影隨形', '穩健步伐', '鏈球', '旋轉', '跳過第'];
 
   BB.sim = function (N, seed0) {
     const races = Object.keys(BB.TEAMS);
@@ -17,7 +19,7 @@
     console.error = e => { if (aiErrs.length < 5) aiErrs.push(String((e && e.stack) || e).split('\n').slice(0, 3).join(' | ')); };
     try {
       for (let n = 0; n < N; n++) {
-        const a = races[n % races.length], b = races[(n * 3 + 1) % races.length];
+        const a = races[(seed0 + n) % races.length], b = races[((seed0 + n) * 7 + 3) % races.length];
         const cfg = { seed: seed0 + n, teams: [BB.defaultTeamConfig(a), BB.defaultTeamConfig(b)] };
         if (n % 3 === 0 && BB.STARS.ripper.teams.indexOf(a) >= 0) cfg.teams[0].stars = ['ripper', 'fungus'];
         const g = new BB.Game(cfg);

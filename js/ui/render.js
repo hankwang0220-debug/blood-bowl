@@ -204,10 +204,16 @@
         ctx.font = `bold ${Math.round(C * 0.32)}px sans-serif`;
         ctx.fillStyle = '#ffeb3b'; ctx.strokeText('✱', cx + r * 0.75, cy - r * 0.6); ctx.fillText('✱', cx + r * 0.75, cy - r * 0.6);
       }
-      if (p.lostTZ) {
-        ctx.font = `bold ${Math.round(C * 0.3)}px sans-serif`;
-        ctx.fillStyle = '#90caf9'; ctx.strokeText('?', cx + r * 0.8, cy + r * 0.6); ctx.fillText('?', cx + r * 0.8, cy + r * 0.6);
-      }
+      // 狀態小標記：分心 ?、生根 ⚘、隊長 C
+      const marks = [];
+      if (p.distracted) marks.push(['?', '#90caf9']);
+      if (p.rooted) marks.push(['⚘', '#a5d6a7']);
+      if (p.captain) marks.push(['C', '#ffd54f']);
+      marks.forEach(([t, col], i) => {
+        ctx.font = `bold ${Math.round(C * 0.26)}px sans-serif`;
+        const mx = cx + r * 0.85, my = cy + r * 0.55 - i * C * 0.26;
+        ctx.fillStyle = col; ctx.strokeText(t, mx, my); ctx.fillText(t, mx, my);
+      });
       if (ui.sel === p.id) {
         ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(cx, cy, r + 4, 0, Math.PI * 2); ctx.stroke();
